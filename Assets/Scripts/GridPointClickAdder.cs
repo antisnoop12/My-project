@@ -8,6 +8,7 @@ public class GridPointClickAdder : MonoBehaviour
     public Camera targetCamera;
     public GridPathRosClient rosClient;
     public UR3ePointInputUI pointUi;
+    public PathActionStore actionStore;
     public Transform baseFrameTransform;
 
     [Header("Click Mode")]
@@ -80,6 +81,9 @@ public class GridPointClickAdder : MonoBehaviour
 
         rosClient.SetGridPoints(points.ToArray());
 
+        if (actionStore != null)
+            actionStore.SyncCount(points.Count);
+
         if (pointUi != null)
             pointUi.SyncFromRosClient();
 
@@ -90,14 +94,7 @@ public class GridPointClickAdder : MonoBehaviour
     {
         clickToAddEnabled = !clickToAddEnabled;
         RefreshModeLabel();
-
         Debug.Log("Click-to-add mode: " + (clickToAddEnabled ? "ON" : "OFF"));
-    }
-
-    public void SetClickMode(bool enabled)
-    {
-        clickToAddEnabled = enabled;
-        RefreshModeLabel();
     }
 
     private void RefreshModeLabel()
@@ -114,11 +111,9 @@ public class GridPointClickAdder : MonoBehaviour
 
         Vector3 planePointLocal = RosToUnity(originRos);
         Vector3 planePointWorld = baseFrameTransform.TransformPoint(planePointLocal);
-
         Vector3 planeNormalWorld = baseFrameTransform.TransformDirection(Vector3.up);
 
         Plane plane = new Plane(planeNormalWorld, planePointWorld + planeNormalWorld * previewLift);
-
         Ray ray = targetCamera.ScreenPointToRay(Input.mousePosition);
 
         if (plane.Raycast(ray, out float enter))

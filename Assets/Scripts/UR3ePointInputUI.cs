@@ -5,6 +5,7 @@ using UnityEngine;
 public class UR3ePointInputUI : MonoBehaviour
 {
     public GridPathRosClient rosClient;
+    public PathActionStore actionStore;
 
     [Header("Input Fields")]
     public TMP_InputField inputX;
@@ -81,6 +82,9 @@ public class UR3ePointInputUI : MonoBehaviour
                 currentPoints.AddRange(existing);
         }
 
+        if (actionStore != null)
+            actionStore.SyncCount(currentPoints.Count);
+
         RefreshText();
     }
 
@@ -93,6 +97,9 @@ public class UR3ePointInputUI : MonoBehaviour
         }
 
         rosClient.SetGridPoints(currentPoints.ToArray());
+
+        if (actionStore != null)
+            actionStore.SyncCount(currentPoints.Count);
     }
 
     private void RefreshText()

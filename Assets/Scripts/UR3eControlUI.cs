@@ -5,9 +5,12 @@ public class UR3eControlUI : MonoBehaviour
 {
     public GridPathRosClient rosClient;
     public UR3eTrajectoryPlayer player;
+    public PathActionStore actionStore;
+    public SimpleParallelGripper gripper;
 
     public float waitTimeout = 10f;
     public float segmentPause = 0.2f;
+    public float gripperActionPause = 0.25f;
 
     [Header("Segment validation")]
     [Range(0f, 1f)]
@@ -51,7 +54,6 @@ public class UR3eControlUI : MonoBehaviour
             yield break;
         }
 
-        // 첫 segment는 ROS 최신 joint_state를 시작 상태로 쓰기 위해 null 유지
         string[] chainedJointNames = null;
         float[] chainedJointPositionsRad = null;
 
@@ -152,16 +154,39 @@ public class UR3eControlUI : MonoBehaviour
                 yield break;
             }
 
-            chainedJointNames = (string[])result.joint_names.Clone();
-            chainedJointPositionsRad = (float[])result.points[result.points.Length - 1].positions_rad.Clone();
-
             if (segmentDuration > 0f)
                 yield return new WaitForSeconds(segmentDuration + segmentPause);
             else
                 yield return new WaitForSeconds(segmentPause);
+
+            yield return ExecuteWaypointAction(i + 1);
+
+            chainedJointNames = (string[])result.joint_names.Clone();
+            chainedJointPositionsRad = (float[])result.points[result.points.Length - 1].positions_rad.Clone();
         }
 
         Debug.Log("All segments completed.");
         moveRoutine = null;
+    }
+
+    private IEnumerator ExecuteWaypointAction(int waypointIndex)
+    {
+        if (actionStore == null || gripper == null)
+            yield break;
+
+        PathActionType action = actionStore.GetAction(waypointIndex);
+
+        if (action == PathActionType.Grip)
+        {
+            Debug.Log($"Waypoint {waypointIndex}: Grip");
+            gripper.Grip();
+            yield return new WaitForSeconds(gripperActionPause);
+        }
+        else if (action == PathActionType.Release)
+        {
+            Debug.Log($"Waypoint {waypointIndex}: Release");
+            gripper.Release();
+            yield return new WaitForSeconds(gripperActionPause);
+        }
     }
 }

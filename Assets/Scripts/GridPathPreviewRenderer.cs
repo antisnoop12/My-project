@@ -32,7 +32,7 @@ public class GridPathPreviewRenderer : MonoBehaviour
     [ContextMenu("Refresh Preview")]
     public void RefreshPreview()
     {
-        Debug.Log("RefreshPreview called");
+        //Debug.Log("RefreshPreview called");
 
         if (rosClient == null)
         {
@@ -51,7 +51,7 @@ public class GridPathPreviewRenderer : MonoBehaviour
         }
 
         var points = rosClient.GetGridPoints();
-        Debug.Log("Preview points count = " + (points == null ? 0 : points.Length));
+        //Debug.Log("Preview points count = " + (points == null ? 0 : points.Length));
 
         Vector3 origin = rosClient.GetGridOrigin();
         Vector3 step = rosClient.GetGridStep();
