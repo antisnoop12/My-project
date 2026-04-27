@@ -212,7 +212,7 @@ public class GridPathRosClient : MonoBehaviour
             return;
         }
 
-        gridPoints = points;
+        gridPoints = points ?? Array.Empty<Int3>();
         Debug.Log($"Grid points updated. Count = {gridPoints.Length}");
     }
 

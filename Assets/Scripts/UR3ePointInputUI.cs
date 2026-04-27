@@ -14,30 +14,15 @@ public class UR3ePointInputUI : MonoBehaviour
     [Header("Display")]
     public TextMeshProUGUI pointsText;
 
-    private readonly List<GridPathRosClient.Int3> currentPoints = new List<GridPathRosClient.Int3>();
+    private readonly List<GridPathRosClient.Int3> currentPoints = new();
 
     private void Start()
     {
-        if (rosClient != null)
-        {
-            var existing = rosClient.GetGridPoints();
-            if (existing != null)
-            {
-                currentPoints.Clear();
-                currentPoints.AddRange(existing);
-                RefreshText();
-            }
-        }
+        SyncFromRosClient();
     }
 
     public void OnClickAddPoint()
     {
-        if (inputX == null || inputY == null || inputZ == null)
-        {
-            Debug.LogError("Input fields are not assigned.");
-            return;
-        }
-
         if (!int.TryParse(inputX.text, out int x))
         {
             Debug.LogError("Invalid X value.");
@@ -74,12 +59,6 @@ public class UR3ePointInputUI : MonoBehaviour
         }
 
         currentPoints.RemoveAt(currentPoints.Count - 1);
-
-        if (currentPoints.Count == 0)
-        {
-            currentPoints.Add(new GridPathRosClient.Int3(0, 0, 0));
-        }
-
         PushToRosClient();
         RefreshText();
     }
@@ -87,10 +66,21 @@ public class UR3ePointInputUI : MonoBehaviour
     public void OnClickClear()
     {
         currentPoints.Clear();
-        currentPoints.Add(new GridPathRosClient.Int3(0, 0, 0));
-        currentPoints.Add(new GridPathRosClient.Int3(0, 1, 0));
-
         PushToRosClient();
+        RefreshText();
+    }
+
+    public void SyncFromRosClient()
+    {
+        currentPoints.Clear();
+
+        if (rosClient != null)
+        {
+            var existing = rosClient.GetGridPoints();
+            if (existing != null)
+                currentPoints.AddRange(existing);
+        }
+
         RefreshText();
     }
 
@@ -112,7 +102,7 @@ public class UR3ePointInputUI : MonoBehaviour
 
         if (currentPoints.Count == 0)
         {
-            pointsText.text = "Points: (none)";
+            pointsText.text = "Points: (empty)";
             return;
         }
 
