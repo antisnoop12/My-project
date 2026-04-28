@@ -6,7 +6,8 @@ public class UR3eControlUI : MonoBehaviour
     public GridPathRosClient rosClient;
     public UR3eTrajectoryPlayer player;
     public PathActionStore actionStore;
-    public SimpleParallelGripper gripper;
+    public HingedGripper gripper;
+    public TrajectoryCsvLogger trajectoryLogger;
 
     public float waitTimeout = 10f;
     public float segmentPause = 0.2f;
@@ -50,9 +51,13 @@ public class UR3eControlUI : MonoBehaviour
         if (points == null || points.Length < 2)
         {
             Debug.LogError("At least 2 grid points are required.");
+            StopLoggingIfNeeded();
             moveRoutine = null;
             yield break;
         }
+
+        if (trajectoryLogger != null)
+            trajectoryLogger.StartLogging();
 
         string[] chainedJointNames = null;
         float[] chainedJointPositionsRad = null;
@@ -98,6 +103,7 @@ public class UR3eControlUI : MonoBehaviour
             if (!received)
             {
                 Debug.LogError($"Timed out waiting for ROS result on segment {i}.");
+                StopLoggingIfNeeded();
                 moveRoutine = null;
                 yield break;
             }
@@ -107,6 +113,7 @@ public class UR3eControlUI : MonoBehaviour
             if (result == null || !result.ok)
             {
                 Debug.LogError($"ROS returned invalid result on segment {i}.");
+                StopLoggingIfNeeded();
                 moveRoutine = null;
                 yield break;
             }
@@ -117,6 +124,7 @@ public class UR3eControlUI : MonoBehaviour
                     $"Segment {i} has no usable trajectory. " +
                     $"fraction={result.fraction}, pointCount={(result.points == null ? 0 : result.points.Length)}"
                 );
+                StopLoggingIfNeeded();
                 moveRoutine = null;
                 yield break;
             }
@@ -140,6 +148,7 @@ public class UR3eControlUI : MonoBehaviour
                 else
                     yield return new WaitForSeconds(segmentPause);
 
+                StopLoggingIfNeeded();
                 moveRoutine = null;
                 yield break;
             }
@@ -150,6 +159,7 @@ public class UR3eControlUI : MonoBehaviour
                 result.points[result.points.Length - 1].positions_rad.Length == 0)
             {
                 Debug.LogError($"Segment {i} has no valid chaining joint state.");
+                StopLoggingIfNeeded();
                 moveRoutine = null;
                 yield break;
             }
@@ -165,6 +175,7 @@ public class UR3eControlUI : MonoBehaviour
             chainedJointPositionsRad = (float[])result.points[result.points.Length - 1].positions_rad.Clone();
         }
 
+        StopLoggingIfNeeded();
         Debug.Log("All segments completed.");
         moveRoutine = null;
     }
@@ -188,5 +199,11 @@ public class UR3eControlUI : MonoBehaviour
             gripper.Release();
             yield return new WaitForSeconds(gripperActionPause);
         }
+    }
+
+    private void StopLoggingIfNeeded()
+    {
+        if (trajectoryLogger != null)
+            trajectoryLogger.StopLogging();
     }
 }

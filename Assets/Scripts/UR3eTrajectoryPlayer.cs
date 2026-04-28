@@ -35,7 +35,7 @@ public class UR3eTrajectoryPlayer : MonoBehaviour
     public float homeMoveDuration = 1.0f;
 
     private Coroutine playRoutine;
-    private float[] homePoseDeg = new float[6];
+    private readonly float[] homePoseDeg = new float[6];
     private bool homeCaptured = false;
 
     private void Start()
@@ -104,11 +104,13 @@ public class UR3eTrajectoryPlayer : MonoBehaviour
         if (playRoutine != null)
             StopCoroutine(playRoutine);
 
-        playRoutine = StartCoroutine(MoveToPoseCoroutine(
-            homePoseDeg[0], homePoseDeg[1], homePoseDeg[2],
-            homePoseDeg[3], homePoseDeg[4], homePoseDeg[5],
-            homeMoveDuration
-        ));
+        playRoutine = StartCoroutine(
+            MoveToPoseCoroutine(
+                homePoseDeg[0], homePoseDeg[1], homePoseDeg[2],
+                homePoseDeg[3], homePoseDeg[4], homePoseDeg[5],
+                homeMoveDuration
+            )
+        );
     }
 
     [ContextMenu("Play Last Trajectory")]
@@ -167,6 +169,23 @@ public class UR3eTrajectoryPlayer : MonoBehaviour
         };
     }
 
+    public float[] GetCurrentJointPositionsDeg()
+    {
+        float[] rad = GetCurrentJointPositionsRadForRos();
+        if (rad == null || rad.Length < 6)
+            return null;
+
+        return new float[]
+        {
+            rad[0] * Mathf.Rad2Deg,
+            rad[1] * Mathf.Rad2Deg,
+            rad[2] * Mathf.Rad2Deg,
+            rad[3] * Mathf.Rad2Deg,
+            rad[4] * Mathf.Rad2Deg,
+            rad[5] * Mathf.Rad2Deg
+        };
+    }
+
     private float GetCurrentJointPositionRad(ArticulationBody joint)
     {
         if (joint == null || joint.dofCount < 1)
@@ -184,17 +203,16 @@ public class UR3eTrajectoryPlayer : MonoBehaviour
         float j5 = invertJ5 ? -GetCurrentJointPositionRad(wrist2) : GetCurrentJointPositionRad(wrist2);
         float j6 = invertJ6 ? -GetCurrentJointPositionRad(wrist3) : GetCurrentJointPositionRad(wrist3);
 
-        Debug.Log(
-            $"ROS start joints rad = [{j1}, {j2}, {j3}, {j4}, {j5}, {j6}]"
-        );
-
         return new float[]
         {
             j1, j2, j3, j4, j5, j6
         };
     }
 
-    private IEnumerator MoveToPoseCoroutine(float j1, float j2, float j3, float j4, float j5, float j6, float duration)
+    private IEnumerator MoveToPoseCoroutine(
+        float j1, float j2, float j3,
+        float j4, float j5, float j6,
+        float duration)
     {
         float from1 = GetCurrentTargetDeg(shoulderPan);
         float from2 = GetCurrentTargetDeg(shoulderLift);
@@ -228,7 +246,7 @@ public class UR3eTrajectoryPlayer : MonoBehaviour
 
     private IEnumerator PlayTrajectoryCoroutine(GridPathResult result)
     {
-        var points = result.points;
+        GridPathPointResult[] points = result.points;
 
         ApplyJointTargetsFromPoint(points[0]);
 
@@ -240,10 +258,13 @@ public class UR3eTrajectoryPlayer : MonoBehaviour
             if (!IsValidPoint(from) || !IsValidPoint(to))
             {
                 Debug.LogError($"Invalid trajectory point at index {i} or {i + 1}");
+                playRoutine = null;
                 yield break;
             }
 
-            float segmentDuration = (to.time_from_start - from.time_from_start) / Mathf.Max(0.0001f, playbackSpeed);
+            float segmentDuration =
+                (to.time_from_start - from.time_from_start) /
+                Mathf.Max(0.0001f, playbackSpeed);
 
             if (segmentDuration <= 0f)
             {
@@ -287,7 +308,9 @@ public class UR3eTrajectoryPlayer : MonoBehaviour
 
     private bool IsValidPoint(GridPathPointResult pt)
     {
-        return pt != null && pt.positions_deg != null && pt.positions_deg.Length >= 6;
+        return pt != null &&
+               pt.positions_deg != null &&
+               pt.positions_deg.Length >= 6;
     }
 
     private void ApplyJointTargetsFromPoint(GridPathPointResult pt)
@@ -302,7 +325,9 @@ public class UR3eTrajectoryPlayer : MonoBehaviour
         );
     }
 
-    private void ApplyJointTargets(float j1, float j2, float j3, float j4, float j5, float j6)
+    private void ApplyJointTargets(
+        float j1, float j2, float j3,
+        float j4, float j5, float j6)
     {
         ApplyJoint(shoulderPan, j1);
         ApplyJoint(shoulderLift, j2);
@@ -327,7 +352,9 @@ public class UR3eTrajectoryPlayer : MonoBehaviour
 
     private float GetCurrentTargetDeg(ArticulationBody joint)
     {
-        if (joint == null) return 0f;
+        if (joint == null)
+            return 0f;
+
         return joint.xDrive.target;
     }
 

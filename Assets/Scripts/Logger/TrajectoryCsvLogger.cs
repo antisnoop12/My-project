@@ -86,7 +86,6 @@ public class TrajectoryCsvLogger : MonoBehaviour
     {
         float interval = 1f / Mathf.Max(0.0001f, sampleRateHz);
 
-        // 시작 시점 1회 저장
         WriteSample();
 
         while (isLogging)
@@ -136,11 +135,8 @@ public class TrajectoryCsvLogger : MonoBehaviour
                 continue;
 
             string suffix = name.Substring("trajectory_".Length);
-            if (int.TryParse(suffix, out int idx))
-            {
-                if (idx > maxIndex)
-                    maxIndex = idx;
-            }
+            if (int.TryParse(suffix, out int idx) && idx > maxIndex)
+                maxIndex = idx;
         }
 
         return maxIndex + 1;
