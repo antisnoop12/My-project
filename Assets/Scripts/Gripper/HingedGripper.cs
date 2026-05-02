@@ -21,11 +21,11 @@ public class HingedGripper : MonoBehaviour
     public float extraCloseDuration = 0.08f;
 
     [Header("Local Euler Angles")]
-    public Vector3 leftOpenEuler = new Vector3(0f, 0f, 0f);
-    public Vector3 leftClosedEuler = new Vector3(0f, 0f, -10f);
+    public Vector3 leftOpenEuler = new Vector3(0f, 0f, -5f);
+    public Vector3 leftClosedEuler = new Vector3(0f, 0f, 0f);
 
-    public Vector3 rightOpenEuler = new Vector3(0f, 0f, 0f);
-    public Vector3 rightClosedEuler = new Vector3(0f, 0f, 10f);
+    public Vector3 rightOpenEuler = new Vector3(0f, 0f, 5f);
+    public Vector3 rightClosedEuler = new Vector3(0f, 0f, 0f);
 
     [Header("Motion")]
     public float motionDuration = 0.2f;

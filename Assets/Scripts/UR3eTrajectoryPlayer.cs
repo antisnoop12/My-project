@@ -77,9 +77,11 @@ public class UR3eTrajectoryPlayer : MonoBehaviour
     public void CaptureCurrentPoseAsHome()
     {
         homePoseDeg[0] = GetCurrentTargetDeg(shoulderPan);
-        homePoseDeg[1] = GetCurrentTargetDeg(shoulderLift);
+        // homePoseDeg[1] = GetCurrentTargetDeg(shoulderLift);
+        homePoseDeg[1] = -90.0f;
         homePoseDeg[2] = GetCurrentTargetDeg(elbow);
-        homePoseDeg[3] = GetCurrentTargetDeg(wrist1);
+        // homePoseDeg[3] = GetCurrentTargetDeg(wrist1);
+        homePoseDeg[3] = -90.0f;
         homePoseDeg[4] = GetCurrentTargetDeg(wrist2);
         homePoseDeg[5] = GetCurrentTargetDeg(wrist3);
 
