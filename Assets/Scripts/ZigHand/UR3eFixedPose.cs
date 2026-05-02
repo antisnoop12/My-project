@@ -15,12 +15,18 @@ public class UR3eFixedPose : MonoBehaviour
     public ArticulationBody wrist3;        // wrist_3_link
 
     [Header("Pose (deg)")]
-    public float shoulderPanDeg = 90f;
+    public float shoulderPanDeg = 0f;
     public float shoulderLiftDeg = -95f;
-    public float elbowDeg = 105f;
-    public float wrist1Deg = -100f;
-    public float wrist2Deg = -90f;
-    public float wrist3Deg = 0f;
+    public float elbowDeg = 135f;
+    public float wrist1Deg = -40f;
+    public float wrist2Deg = 0f;
+    public float wrist3Deg = 90f;
+    // public float shoulderPanDeg = 90f;
+    // public float shoulderLiftDeg = -95f;
+    // public float elbowDeg = 105f;
+    // public float wrist1Deg = -100f;
+    // public float wrist2Deg = -90f;
+    // public float wrist3Deg = 0f;
 
     [Header("Drive settings")]
     public float stiffness = 30000f;
