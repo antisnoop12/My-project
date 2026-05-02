@@ -1,49 +1,44 @@
 using System;
-using System.Globalization;
 using UnityEngine;
 using Unity.Robotics.ROSTCPConnector;
 using RosMessageTypes.Std;
+using System.Globalization;
 
 public class GridPathRosClient : MonoBehaviour
 {
-    [Header("ROS Topics")]
-    [SerializeField] private string requestTopic = "/grid_path_request";
-    [SerializeField] private string resultTopic = "/grid_path_result";
+    [SerializeField] private string requestTopic = "/grid_path_request"; [SerializeField] private string resultTopic = "/grid_path_result";
 
     [Header("Request Settings")]
     [SerializeField] private string frameId = "base";
     [SerializeField] private string groupName = "ur_manipulator";
     [SerializeField] private string linkName = "tool0";
 
-    [SerializeField] private OrientationData orientation = new OrientationData
+    [SerializeField]
+    private OrientationData orientation = new OrientationData
     {
+        // qx = 0.0f,
+        // qy = 1.0f,
+        // qz = 0.0f,
+        // qw = 0.0f
         qx = -0.00039187f,
         qy = 0.99984348f,
         qz = 0.01247830f,
         qw = 0.01253627f
     };
 
+    // [SerializeField] private Vector3 gridOrigin = new Vector3(0.30f, -0.10f, 0.25f);
     [SerializeField] private Vector3 gridOrigin = new Vector3(-0.13686154f, -0.26718082f, 0.14697126f);
     [SerializeField] private Vector3 gridStep = new Vector3(0.02f, 0.02f, 0.02f);
 
-    [Header("Grid Point Input")]
-    [SerializeField] private Int3[] gridPoints = new Int3[]
+    [SerializeField]
+    private Int3[] gridPoints = new Int3[]
     {
         new Int3(0, 0, 0),
-        new Int3(0, 0, 1)
+        new Int3(0, 0, 200),
+        new Int3(380, 0, 200),
+        new Int3(380, 155, 200)
     };
 
-    [Header("Unity Coordinate Input (Optional)")]
-    [SerializeField] private bool useUnityPointInput = false;
-    [SerializeField] private bool unityPointsAreWorldSpace = true;
-    [SerializeField] private Transform baseFrameTransform;
-    [SerializeField] private Vector3[] unityPoints = new Vector3[]
-    {
-        new Vector3(-0.111f, 0.05549323f, -0.245f),
-        new Vector3(-0.05900016f, 0.05549321f, -0.3599993f)
-    };
-
-    [Header("Planner Settings")]
     [SerializeField] private int subdividePerSegment = 10;
     [SerializeField] private float maxStep = 0.005f;
     [SerializeField] private float jumpThreshold = 0.0f;
@@ -51,11 +46,11 @@ public class GridPathRosClient : MonoBehaviour
     [SerializeField] private bool executeOnRequest = false;
     [SerializeField] private bool requireFullFraction = true;
 
-    private ROSConnection ros;
     private GridPathResult lastResult;
-
     public GridPathResult LastResult => lastResult;
     public int ResultVersion { get; private set; }
+
+    private ROSConnection ros;
 
     [Serializable]
     public class OrientationData
@@ -99,6 +94,21 @@ public class GridPathRosClient : MonoBehaviour
         public bool require_full_fraction;
     }
 
+    public Vector3 GetGridOrigin()
+    {
+        return gridOrigin;
+    }
+
+    public Vector3 GetGridStep()
+    {
+        return gridStep;
+    }
+
+    public string GetFrameId()
+    {
+        return frameId;
+    }
+
     private void Start()
     {
         ros = ROSConnection.GetOrCreateInstance();
@@ -116,51 +126,10 @@ public class GridPathRosClient : MonoBehaviour
         }
     }
 
-    public Vector3 GetGridOrigin()
-    {
-        return gridOrigin;
-    }
-
-    public Vector3 GetGridStep()
-    {
-        return gridStep;
-    }
-
-    public string GetFrameId()
-    {
-        return frameId;
-    }
-
-    public Int3[] GetGridPoints()
-    {
-        return gridPoints;
-    }
-
-    public void SetGridPoints(Int3[] points)
-    {
-        if (points == null)
-        {
-            gridPoints = Array.Empty<Int3>();
-            Debug.LogWarning("SetGridPoints called with null. Cleared points.");
-            return;
-        }
-
-        gridPoints = points;
-        Debug.Log("Grid points updated. Count = " + gridPoints.Length);
-    }
-
-    public void SetUnityPoints(Vector3[] points)
-    {
-        unityPoints = points ?? Array.Empty<Vector3>();
-        Debug.Log("Unity points updated. Count = " + unityPoints.Length);
-    }
-
     [ContextMenu("Send Request")]
     public void SendRequest()
     {
-        Int3[] pointsToSend = GetPointsToSend();
-
-        GridPathRequest req = new GridPathRequest
+        var req = new GridPathRequest
         {
             frame_id = frameId,
             group_name = groupName,
@@ -168,7 +137,7 @@ public class GridPathRosClient : MonoBehaviour
             orientation = orientation,
             grid_origin = new float[] { gridOrigin.x, gridOrigin.y, gridOrigin.z },
             grid_step = new float[] { gridStep.x, gridStep.y, gridStep.z },
-            grid_points = pointsToSend,
+            grid_points = gridPoints,
             subdivide_per_segment = subdividePerSegment,
             max_step = maxStep,
             jump_threshold = jumpThreshold,
@@ -182,13 +151,9 @@ public class GridPathRosClient : MonoBehaviour
         Debug.Log("Sent request: " + json);
     }
 
-    public void SendRequestWithGridPoints(
-        Int3[] points,
-        bool requireFullFractionOverride = false,
-        string[] startJointNames = null,
-        float[] startJointPositionsRad = null)
+    public void SendRequestWithGridPoints(Int3[] points, bool requireFullFractionOverride = false, string[] startJointNames = null, float[] startJointPositionsRad = null)
     {
-        GridPathRequest req = new GridPathRequest
+        var req = new GridPathRequest
         {
             frame_id = frameId,
             group_name = groupName,
@@ -215,7 +180,7 @@ public class GridPathRosClient : MonoBehaviour
             string namesJson = "\"start_joint_names\":[";
             for (int i = 0; i < startJointNames.Length; i++)
             {
-                namesJson += "\"" + startJointNames[i] + "\"";
+                namesJson += $"\"{startJointNames[i]}\"";
                 if (i < startJointNames.Length - 1)
                     namesJson += ",";
             }
@@ -224,7 +189,7 @@ public class GridPathRosClient : MonoBehaviour
             string posJson = "\"start_joint_positions_rad\":[";
             for (int i = 0; i < startJointPositionsRad.Length; i++)
             {
-                posJson += startJointPositionsRad[i].ToString("R", CultureInfo.InvariantCulture);
+                posJson += startJointPositionsRad[i].ToString("R", System.Globalization.CultureInfo.InvariantCulture);
                 if (i < startJointPositionsRad.Length - 1)
                     posJson += ",";
             }
@@ -237,57 +202,21 @@ public class GridPathRosClient : MonoBehaviour
         Debug.Log("Sent segment request: " + json);
     }
 
-    public Int3 ConvertUnityPointToGridPoint(Vector3 unityPoint)
+    public Int3[] GetGridPoints()
     {
-        Vector3 localUnity = unityPoint;
-
-        if (unityPointsAreWorldSpace)
-        {
-            if (baseFrameTransform == null)
-            {
-                Debug.LogError("baseFrameTransform is null. Cannot convert world Unity point to base-local point.");
-                return new Int3(0, 0, 0);
-            }
-
-            localUnity = baseFrameTransform.InverseTransformPoint(unityPoint);
-        }
-
-        Vector3 rosPoint = UnityToRos(localUnity);
-
-        int gx = Mathf.RoundToInt((rosPoint.x - gridOrigin.x) / gridStep.x);
-        int gy = Mathf.RoundToInt((rosPoint.y - gridOrigin.y) / gridStep.y);
-        int gz = Mathf.RoundToInt((rosPoint.z - gridOrigin.z) / gridStep.z);
-
-        Debug.Log(
-            "Unity point " + unityPoint +
-            " -> local " + localUnity +
-            " -> ros " + rosPoint +
-            " -> grid [" + gx + "," + gy + "," + gz + "]"
-        );
-
-        return new Int3(gx, gy, gz);
-    }
-
-    public Int3[] ConvertUnityPointsToGridPoints()
-    {
-        if (unityPoints == null || unityPoints.Length == 0)
-            return Array.Empty<Int3>();
-
-        Int3[] converted = new Int3[unityPoints.Length];
-        for (int i = 0; i < unityPoints.Length; i++)
-        {
-            converted[i] = ConvertUnityPointToGridPoint(unityPoints[i]);
-        }
-
-        return converted;
-    }
-
-    private Int3[] GetPointsToSend()
-    {
-        if (useUnityPointInput && unityPoints != null && unityPoints.Length > 0)
-            return ConvertUnityPointsToGridPoints();
-
         return gridPoints;
+    }
+
+    public void SetGridPoints(Int3[] points)
+    {
+        if (points == null || points.Length == 0)
+        {
+            Debug.LogWarning("SetGridPoints called with empty points.");
+            return;
+        }
+
+        gridPoints = points ?? Array.Empty<Int3>();
+        Debug.Log($"Grid points updated. Count = {gridPoints.Length}");
     }
 
     private void OnResultReceived(StringMsg msg)
@@ -308,14 +237,14 @@ public class GridPathRosClient : MonoBehaviour
         }
 
         Debug.Log(
-            "Result OK | fraction=" + lastResult.fraction +
-            " | trajectory_point_count=" + lastResult.trajectory_point_count
+            $"Result OK | fraction={lastResult.fraction} | " +
+            $"trajectory_point_count={lastResult.trajectory_point_count}"
         );
 
         if (lastResult.points != null && lastResult.points.Length > 0)
         {
-            GridPathPointResult first = lastResult.points[0];
-            GridPathPointResult last = lastResult.points[lastResult.points.Length - 1];
+            var first = lastResult.points[0];
+            var last = lastResult.points[lastResult.points.Length - 1];
 
             Debug.Log("First point time: " + first.time_from_start);
             Debug.Log("Last point time: " + last.time_from_start);
@@ -329,44 +258,22 @@ public class GridPathRosClient : MonoBehaviour
         ResultVersion++;
     }
 
-    private Vector3 UnityToRos(Vector3 unityLocal)
-    {
-        // inverse of RosToUnity = (-y, z, x)
-        return new Vector3(
-            unityLocal.z,
-            -unityLocal.x,
-            unityLocal.y
-        );
-    }
-
     private string ToBridgeJson(GridPathRequest req)
     {
         string orientationJson =
-            "\"orientation\":{\"qx\":" + req.orientation.qx.ToString(CultureInfo.InvariantCulture) +
-            ",\"qy\":" + req.orientation.qy.ToString(CultureInfo.InvariantCulture) +
-            ",\"qz\":" + req.orientation.qz.ToString(CultureInfo.InvariantCulture) +
-            ",\"qw\":" + req.orientation.qw.ToString(CultureInfo.InvariantCulture) +
-            "}";
+            $"\"orientation\":{{\"qx\":{req.orientation.qx},\"qy\":{req.orientation.qy},\"qz\":{req.orientation.qz},\"qw\":{req.orientation.qw}}}";
 
         string originJson =
-            "\"grid_origin\":[" +
-            req.grid_origin[0].ToString(CultureInfo.InvariantCulture) + "," +
-            req.grid_origin[1].ToString(CultureInfo.InvariantCulture) + "," +
-            req.grid_origin[2].ToString(CultureInfo.InvariantCulture) +
-            "]";
+            $"\"grid_origin\":[{req.grid_origin[0]},{req.grid_origin[1]},{req.grid_origin[2]}]";
 
         string stepJson =
-            "\"grid_step\":[" +
-            req.grid_step[0].ToString(CultureInfo.InvariantCulture) + "," +
-            req.grid_step[1].ToString(CultureInfo.InvariantCulture) + "," +
-            req.grid_step[2].ToString(CultureInfo.InvariantCulture) +
-            "]";
+            $"\"grid_step\":[{req.grid_step[0]},{req.grid_step[1]},{req.grid_step[2]}]";
 
         string pointsJson = "\"grid_points\":[";
         for (int i = 0; i < req.grid_points.Length; i++)
         {
-            Int3 p = req.grid_points[i];
-            pointsJson += "[" + p.x + "," + p.y + "," + p.z + "]";
+            var p = req.grid_points[i];
+            pointsJson += $"[{p.x},{p.y},{p.z}]";
             if (i < req.grid_points.Length - 1)
                 pointsJson += ",";
         }
@@ -374,19 +281,19 @@ public class GridPathRosClient : MonoBehaviour
 
         string json =
             "{"
-            + "\"frame_id\":\"" + req.frame_id + "\","
-            + "\"group_name\":\"" + req.group_name + "\","
-            + "\"link_name\":\"" + req.link_name + "\","
+            + $"\"frame_id\":\"{req.frame_id}\","
+            + $"\"group_name\":\"{req.group_name}\","
+            + $"\"link_name\":\"{req.link_name}\","
             + orientationJson + ","
             + originJson + ","
             + stepJson + ","
             + pointsJson + ","
-            + "\"subdivide_per_segment\":" + req.subdivide_per_segment + ","
-            + "\"max_step\":" + req.max_step.ToString(CultureInfo.InvariantCulture) + ","
-            + "\"jump_threshold\":" + req.jump_threshold.ToString(CultureInfo.InvariantCulture) + ","
-            + "\"avoid_collisions\":" + req.avoid_collisions.ToString().ToLower() + ","
-            + "\"execute\":" + req.execute.ToString().ToLower() + ","
-            + "\"require_full_fraction\":" + req.require_full_fraction.ToString().ToLower()
+            + $"\"subdivide_per_segment\":{req.subdivide_per_segment},"
+            + $"\"max_step\":{req.max_step},"
+            + $"\"jump_threshold\":{req.jump_threshold},"
+            + $"\"avoid_collisions\":{req.avoid_collisions.ToString().ToLower()},"
+            + $"\"execute\":{req.execute.ToString().ToLower()},"
+            + $"\"require_full_fraction\":{req.require_full_fraction.ToString().ToLower()}"
             + "}";
 
         return json;

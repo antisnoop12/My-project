@@ -22,10 +22,10 @@ public class HingedGripper : MonoBehaviour
 
     [Header("Local Euler Angles")]
     public Vector3 leftOpenEuler = new Vector3(0f, 0f, -5f);
-    public Vector3 leftClosedEuler = new Vector3(0f, 0f, 0f);
+    public Vector3 leftClosedEuler = new Vector3(0f, 0f, 3f);
 
     public Vector3 rightOpenEuler = new Vector3(0f, 0f, 5f);
-    public Vector3 rightClosedEuler = new Vector3(0f, 0f, 0f);
+    public Vector3 rightClosedEuler = new Vector3(0f, 0f, -3f);
 
     [Header("Motion")]
     public float motionDuration = 0.2f;
