@@ -1481,6 +1481,7 @@ GameObject:
   - component: {fileID: 141459354}
   - component: {fileID: 141459358}
   - component: {fileID: 141459357}
+  - component: {fileID: 141459359}
   m_Layer: 0
   m_Name: Cube_2
   m_TagString: Untagged
@@ -1553,6 +1554,27 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 141459353}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!65 &141459359
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 141459353}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 1.000001, y: 1.0000006, z: 1.0000004}
+  m_Center: {x: 0.0000038146973, y: -0.00000059604645, z: -0.0000009536743}
 --- !u!1 &142784513
 GameObject:
   m_ObjectHideFlags: 8
@@ -9739,6 +9761,12 @@ MonoBehaviour:
   pickZ: 50
   liftZ: 200
   goalZ: 350
+  lowerUntilContact: 1
+  lowerStepZ: 5
+  minLowerZ: 0
+  contactThreshold: 0.005
+  contactCheckPause: 0.05
+  releaseWhenContact: 0
   useRosClientFirstPointAsStart: 1
   fallbackStartGridPoint:
     x: 0

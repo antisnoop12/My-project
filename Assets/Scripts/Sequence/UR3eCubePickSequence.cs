@@ -28,12 +28,20 @@ public class UR3eCubePickSequence : MonoBehaviour
     public int liftZ = 200;
     public int goalZ = 300;
 
+    [Header("Joint Pose After Pick + Lift")]
+    public float jointMoveDuration = 1.5f;
+
+    public float targetShoulderPanDeg = 0f;
+    public float targetShoulderLiftDeg = -95f;
+    public float targetElbowDeg = 135f;
+    public float targetWrist1Deg = -40f;
+    public float targetWrist2Deg = 0f;
+    public float targetWrist3Deg = 90f;
+
     [Header("Lower Until Contact")]
     public bool lowerUntilContact = true;
-    public int lowerStepZ = 5;
     public int minLowerZ = 0;
     public float contactThreshold = 0.005f;
-    public float contactCheckPause = 0.05f;
     public bool releaseWhenContact = false;
 
     [Header("Start Point")]
@@ -65,7 +73,12 @@ public class UR3eCubePickSequence : MonoBehaviour
     private bool placeContactDetected;
     private bool placeFailed;
 
-    [ContextMenu("Run Pick Lift And Move To Goal Sequence")]
+    // =========================================================
+    // 버튼 함수 1
+    // 기존 기능:
+    // Pick -> Lift -> Goal 이동 -> 접촉할 때까지 하강
+    // =========================================================
+    [ContextMenu("Run Pick Lift Move Goal And Lower Sequence")]
     public void RunPickLiftAndMoveToGoalSequence()
     {
         if (targetCube == null)
@@ -88,6 +101,29 @@ public class UR3eCubePickSequence : MonoBehaviour
         );
     }
 
+    // =========================================================
+    // 버튼 함수 2
+    // 새 기능:
+    // Pick -> Lift -> 지정한 Joint Axis 각도로 이동
+    // 버튼 OnClick에는 이 함수를 넣으면 됨
+    // =========================================================
+    [ContextMenu("Run Pick Lift And Move To Joint Pose Sequence")]
+    public void RunPickLiftAndMoveToJointPoseSequence()
+    {
+        if (targetCube == null)
+        {
+            Debug.LogError("targetCube is not assigned.");
+            return;
+        }
+
+        if (sequenceRoutine != null)
+            StopCoroutine(sequenceRoutine);
+
+        sequenceRoutine = StartCoroutine(
+            PickLiftAndMoveToJointPoseCoroutine(targetCube)
+        );
+    }
+
     public void StopSequence()
     {
         if (sequenceRoutine != null)
@@ -100,7 +136,7 @@ public class UR3eCubePickSequence : MonoBehaviour
             player.StopPlayback();
     }
 
-    private IEnumerator PickLiftMoveGoalAndLowerCoroutine(Transform cube, Transform goal)
+    private IEnumerator PickLiftAndMoveToJointPoseCoroutine(Transform cube)
     {
         if (!ValidateReferences())
         {
@@ -110,10 +146,9 @@ public class UR3eCubePickSequence : MonoBehaviour
 
         chainedJointNames = null;
         chainedJointPositionsRad = null;
+
         hasGripPoint = false;
         lastGripPoint = null;
-        placeContactDetected = false;
-        placeFailed = false;
 
         Vector2 targetUnity2D = GetUnity2DPosition(cube);
 
@@ -138,7 +173,7 @@ public class UR3eCubePickSequence : MonoBehaviour
         GridPathRosClient.Int3 startPoint = GetStartGridPoint();
 
         Debug.Log(
-            $"Sequence Start\n" +
+            $"Pick Lift JointPose Sequence Start\n" +
             $"Target Unity2D: {targetUnity2D}\n" +
             $"Start: [{startPoint.x}, {startPoint.y}, {startPoint.z}]\n" +
             $"Approach: [{approachPoint.x}, {approachPoint.y}, {approachPoint.z}]\n" +
@@ -148,7 +183,10 @@ public class UR3eCubePickSequence : MonoBehaviour
 
         // =========================================================
         // PICK START
-        // targetCube 위치로 이동해서 z=pickZ까지 내려간 뒤 그리퍼를 닫음
+        // targetCube의 Unity 월드 좌표를 ROS Grid 좌표로 변환
+        // z=approachZ 위치로 접근
+        // 같은 x, y에서 z=pickZ 위치로 하강
+        // 그리퍼를 닫아서 targetCube를 잡음
         // =========================================================
 
         if (!IsSamePoint(startPoint, approachPoint))
@@ -192,7 +230,164 @@ public class UR3eCubePickSequence : MonoBehaviour
 
         // =========================================================
         // LIFT START
-        // 잡은 위치에서 x, y는 유지하고 z만 liftZ까지 올림
+        // grip한 위치에서 x, y는 유지하고 z만 liftZ까지 올림
+        // =========================================================
+
+        yield return RequestAndPlaySegmentCoroutine(lastGripPoint, liftPoint, 2);
+
+        if (!lastSegmentSucceeded)
+        {
+            Debug.LogError("Lift failed.");
+            sequenceRoutine = null;
+            yield break;
+        }
+
+        lastGripPoint = new GridPathRosClient.Int3(
+            liftPoint.x,
+            liftPoint.y,
+            liftPoint.z
+        );
+
+        Debug.Log("Lift completed.");
+
+        // =========================================================
+        // LIFT END
+        // =========================================================
+
+
+        // =========================================================
+        // JOINT POSE MOVE START
+        // Lift 이후 ROS Grid 좌표 이동이 아니라
+        // UR3eTrajectoryPlayer에 연결된 각 ArticulationBody의 xDrive.target을
+        // 아래 목표 각도로 직접 보간 이동함
+        //
+        // Shoulder Pan Deg  = 0
+        // Shoulder Lift Deg = -95
+        // Elbow Deg         = 135
+        // Wrist 1 Deg       = -40
+        // Wrist 2 Deg       = 0
+        // Wrist 3 Deg       = 90
+        // =========================================================
+
+        if (!ValidateJointReferences())
+        {
+            sequenceRoutine = null;
+            yield break;
+        }
+
+        yield return MoveToJointPoseDirectCoroutine(
+            targetShoulderPanDeg,
+            targetShoulderLiftDeg,
+            targetElbowDeg,
+            targetWrist1Deg,
+            targetWrist2Deg,
+            targetWrist3Deg,
+            jointMoveDuration
+        );
+
+        Debug.Log("Joint pose move completed.");
+
+        // =========================================================
+        // JOINT POSE MOVE END
+        // =========================================================
+
+        Debug.Log("Pick Lift And Move To Joint Pose Sequence Completed.");
+        sequenceRoutine = null;
+    }
+
+    private IEnumerator PickLiftMoveGoalAndLowerCoroutine(Transform cube, Transform goal)
+    {
+        if (!ValidateReferences())
+        {
+            sequenceRoutine = null;
+            yield break;
+        }
+
+        chainedJointNames = null;
+        chainedJointPositionsRad = null;
+
+        hasGripPoint = false;
+        lastGripPoint = null;
+
+        placeContactDetected = false;
+        placeFailed = false;
+
+        Vector2 targetUnity2D = GetUnity2DPosition(cube);
+
+        GridPathRosClient.Int3 approachPoint =
+            pointInputUI.ConvertUnity2Ros(targetUnity2D, approachZ);
+
+        GridPathRosClient.Int3 pickPoint =
+            pointInputUI.ConvertUnity2Ros(targetUnity2D, pickZ);
+
+        GridPathRosClient.Int3 liftPoint =
+            pointInputUI.ConvertUnity2Ros(targetUnity2D, liftZ);
+
+        if (approachPoint == null ||
+            pickPoint == null ||
+            liftPoint == null)
+        {
+            Debug.LogError("Failed to convert target position to ROS grid point.");
+            sequenceRoutine = null;
+            yield break;
+        }
+
+        GridPathRosClient.Int3 startPoint = GetStartGridPoint();
+
+        Debug.Log(
+            $"Sequence Start\n" +
+            $"Target Unity2D: {targetUnity2D}\n" +
+            $"Start: [{startPoint.x}, {startPoint.y}, {startPoint.z}]\n" +
+            $"Approach: [{approachPoint.x}, {approachPoint.y}, {approachPoint.z}]\n" +
+            $"Pick: [{pickPoint.x}, {pickPoint.y}, {pickPoint.z}]\n" +
+            $"Lift: [{liftPoint.x}, {liftPoint.y}, {liftPoint.z}]"
+        );
+
+        // =========================================================
+        // PICK START
+        // =========================================================
+
+        if (!IsSamePoint(startPoint, approachPoint))
+        {
+            yield return RequestAndPlaySegmentCoroutine(startPoint, approachPoint, 0);
+
+            if (!lastSegmentSucceeded)
+            {
+                Debug.LogError("Pick failed at approach movement.");
+                sequenceRoutine = null;
+                yield break;
+            }
+        }
+
+        yield return RequestAndPlaySegmentCoroutine(approachPoint, pickPoint, 1);
+
+        if (!lastSegmentSucceeded)
+        {
+            Debug.LogError("Pick failed at downward movement.");
+            sequenceRoutine = null;
+            yield break;
+        }
+
+        lastGripPoint = new GridPathRosClient.Int3(
+            pickPoint.x,
+            pickPoint.y,
+            pickPoint.z
+        );
+
+        hasGripPoint = true;
+
+        gripper.Grip();
+        yield return new WaitForSeconds(gripperActionPause);
+
+        Debug.Log("Pick completed.");
+
+        // =========================================================
+        // PICK END
+        // =========================================================
+
+
+        // =========================================================
+        // LIFT START
         // =========================================================
 
         yield return RequestAndPlaySegmentCoroutine(lastGripPoint, liftPoint, 2);
@@ -219,8 +414,8 @@ public class UR3eCubePickSequence : MonoBehaviour
 
         // =========================================================
         // MOVE TO GOAL START
-        // goalObject가 부모를 따라 움직일 수 있으므로,
-        // lift가 끝난 직후 goalObject.position 월드 좌표를 다시 읽음
+        // goalObject가 부모 객체를 따라 움직일 수 있으므로,
+        // lift가 끝난 직후의 goalObject.position 월드 좌표를 다시 읽음
         // =========================================================
 
         Vector2 currentGoalUnity2D = GetUnity2DPosition(goal);
@@ -264,9 +459,9 @@ public class UR3eCubePickSequence : MonoBehaviour
 
         // =========================================================
         // LOWER UNTIL CONTACT START
-        // 현재 goal 위치의 x, y는 유지하고 z만 조금씩 낮춤
-        // 매번 이동 후 targetCube와 goalObject의 Collider 접촉 여부를 검사
-        // 접촉하면 하강을 멈춤
+        // goal 위치에서 z만 minLowerZ까지 한 번에 내려가는 trajectory를 요청
+        // 이동 중 매 프레임 targetCube와 goalObject Collider 접촉 확인
+        // 접촉하면 즉시 player.StopPlayback()
         // =========================================================
 
         if (lowerUntilContact)
@@ -289,7 +484,7 @@ public class UR3eCubePickSequence : MonoBehaviour
         sequenceRoutine = null;
     }
 
-    private IEnumerator LowerUntilTargetTouchesGoalCoroutine(int startSegmentIndex)
+    private IEnumerator LowerUntilTargetTouchesGoalCoroutine(int segmentIndex)
     {
         placeContactDetected = false;
         placeFailed = false;
@@ -329,67 +524,129 @@ public class UR3eCubePickSequence : MonoBehaviour
             yield break;
         }
 
-        int segmentIndex = startSegmentIndex;
-        int step = Mathf.Max(1, Mathf.Abs(lowerStepZ));
-
-        GridPathRosClient.Int3 currentPoint = new GridPathRosClient.Int3(
+        GridPathRosClient.Int3 startPoint = new GridPathRosClient.Int3(
             lastGripPoint.x,
             lastGripPoint.y,
             lastGripPoint.z
         );
 
-        while (currentPoint.z > minLowerZ)
+        GridPathRosClient.Int3 endPoint = new GridPathRosClient.Int3(
+            lastGripPoint.x,
+            lastGripPoint.y,
+            minLowerZ
+        );
+
+        Debug.Log(
+            $"Continuous lowering until contact: " +
+            $"[{startPoint.x}, {startPoint.y}, {startPoint.z}] -> " +
+            $"[{endPoint.x}, {endPoint.y}, {endPoint.z}]"
+        );
+
+        lastSegmentSucceeded = false;
+
+        GridPathRosClient.Int3[] segment = new GridPathRosClient.Int3[]
         {
-            int nextZ = Mathf.Max(minLowerZ, currentPoint.z - step);
+            new GridPathRosClient.Int3(startPoint.x, startPoint.y, startPoint.z),
+            new GridPathRosClient.Int3(endPoint.x, endPoint.y, endPoint.z)
+        };
 
-            GridPathRosClient.Int3 nextPoint = new GridPathRosClient.Int3(
-                currentPoint.x,
-                currentPoint.y,
-                nextZ
-            );
+        int startVersion = rosClient.ResultVersion;
 
-            Debug.Log(
-                $"Lowering until contact: " +
-                $"[{currentPoint.x}, {currentPoint.y}, {currentPoint.z}] -> " +
-                $"[{nextPoint.x}, {nextPoint.y}, {nextPoint.z}]"
-            );
+        rosClient.SendRequestWithGridPoints(
+            segment,
+            requireFullFraction,
+            chainedJointNames,
+            chainedJointPositionsRad
+        );
 
-            yield return RequestAndPlaySegmentCoroutine(
-                currentPoint,
-                nextPoint,
-                segmentIndex
-            );
+        float elapsedWait = 0f;
+        bool received = false;
 
-            segmentIndex++;
-
-            if (!lastSegmentSucceeded)
+        while (elapsedWait < waitTimeout)
+        {
+            if (rosClient.ResultVersion > startVersion)
             {
-                Debug.LogError("Lower movement segment failed.");
-                placeFailed = true;
-                yield break;
+                received = true;
+                break;
             }
 
-            currentPoint = new GridPathRosClient.Int3(
-                nextPoint.x,
-                nextPoint.y,
-                nextPoint.z
+            elapsedWait += Time.deltaTime;
+            yield return null;
+        }
+
+        if (!received)
+        {
+            Debug.LogError("Timed out waiting for ROS result on continuous lower segment.");
+            placeFailed = true;
+            yield break;
+        }
+
+        GridPathResult result = rosClient.LastResult;
+
+        if (result == null || !result.ok)
+        {
+            Debug.LogError("ROS returned invalid result on continuous lower segment.");
+            placeFailed = true;
+            yield break;
+        }
+
+        if (result.points == null || result.points.Length < 2)
+        {
+            Debug.LogError(
+                $"Continuous lower segment has no usable trajectory. " +
+                $"fraction={result.fraction}, " +
+                $"pointCount={(result.points == null ? 0 : result.points.Length)}"
             );
 
-            lastGripPoint = new GridPathRosClient.Int3(
-                currentPoint.x,
-                currentPoint.y,
-                currentPoint.z
+            placeFailed = true;
+            yield break;
+        }
+
+        if (result.fraction < minAcceptableFraction)
+        {
+            Debug.LogError(
+                $"Continuous lower segment planned only partially. " +
+                $"fraction={result.fraction}, required>={minAcceptableFraction}"
             );
 
-            yield return new WaitForSeconds(contactCheckPause);
+            placeFailed = true;
+            yield break;
+        }
 
+        float segmentDuration =
+            result.points[result.points.Length - 1].time_from_start /
+            Mathf.Max(0.0001f, player.playbackSpeed);
+
+        player.PlayLastTrajectory();
+
+        float elapsedMove = 0f;
+
+        while (elapsedMove < segmentDuration)
+        {
             if (AreObjectsTouching(targetCube, goalObject))
             {
-                Debug.Log(
-                    $"Contact detected. Lower stopped at Grid Z = {currentPoint.z}"
+                player.StopPlayback();
+
+                float t = Mathf.Clamp01(
+                    elapsedMove / Mathf.Max(0.0001f, segmentDuration)
+                );
+
+                int estimatedZ = Mathf.RoundToInt(
+                    Mathf.Lerp(startPoint.z, endPoint.z, t)
+                );
+
+                lastGripPoint = new GridPathRosClient.Int3(
+                    startPoint.x,
+                    startPoint.y,
+                    estimatedZ
                 );
 
                 placeContactDetected = true;
+
+                Debug.Log(
+                    $"Contact detected during continuous lower. " +
+                    $"Playback stopped. Estimated Grid Z = {estimatedZ}"
+                );
 
                 if (releaseWhenContact)
                 {
@@ -399,6 +656,30 @@ public class UR3eCubePickSequence : MonoBehaviour
 
                 yield break;
             }
+
+            elapsedMove += Time.deltaTime;
+            yield return null;
+        }
+
+        if (AreObjectsTouching(targetCube, goalObject))
+        {
+            placeContactDetected = true;
+
+            lastGripPoint = new GridPathRosClient.Int3(
+                endPoint.x,
+                endPoint.y,
+                endPoint.z
+            );
+
+            Debug.Log("Contact detected at the end of continuous lower.");
+
+            if (releaseWhenContact)
+            {
+                gripper.Release();
+                yield return new WaitForSeconds(gripperActionPause);
+            }
+
+            yield break;
         }
 
         Debug.LogWarning(
@@ -509,6 +790,122 @@ public class UR3eCubePickSequence : MonoBehaviour
             (float[])result.points[result.points.Length - 1].positions_rad.Clone();
 
         lastSegmentSucceeded = true;
+    }
+
+    private IEnumerator MoveToJointPoseDirectCoroutine(
+        float shoulderPanDeg,
+        float shoulderLiftDeg,
+        float elbowDeg,
+        float wrist1Deg,
+        float wrist2Deg,
+        float wrist3Deg,
+        float duration)
+    {
+        player.StopPlayback();
+
+        float fromShoulderPan = GetJointTargetDeg(player.shoulderPan);
+        float fromShoulderLift = GetJointTargetDeg(player.shoulderLift);
+        float fromElbow = GetJointTargetDeg(player.elbow);
+        float fromWrist1 = GetJointTargetDeg(player.wrist1);
+        float fromWrist2 = GetJointTargetDeg(player.wrist2);
+        float fromWrist3 = GetJointTargetDeg(player.wrist3);
+
+        float safeDuration = Mathf.Max(0.0001f, duration);
+        float elapsed = 0f;
+
+        Debug.Log(
+            $"MoveToJointPoseDirect Start\n" +
+            $"Shoulder Pan: {fromShoulderPan} -> {shoulderPanDeg}\n" +
+            $"Shoulder Lift: {fromShoulderLift} -> {shoulderLiftDeg}\n" +
+            $"Elbow: {fromElbow} -> {elbowDeg}\n" +
+            $"Wrist1: {fromWrist1} -> {wrist1Deg}\n" +
+            $"Wrist2: {fromWrist2} -> {wrist2Deg}\n" +
+            $"Wrist3: {fromWrist3} -> {wrist3Deg}"
+        );
+
+        while (elapsed < safeDuration)
+        {
+            float t = Mathf.Clamp01(elapsed / safeDuration);
+
+            ApplyJointTargetDeg(player.shoulderPan, Mathf.Lerp(fromShoulderPan, shoulderPanDeg, t));
+            ApplyJointTargetDeg(player.shoulderLift, Mathf.Lerp(fromShoulderLift, shoulderLiftDeg, t));
+            ApplyJointTargetDeg(player.elbow, Mathf.Lerp(fromElbow, elbowDeg, t));
+            ApplyJointTargetDeg(player.wrist1, Mathf.Lerp(fromWrist1, wrist1Deg, t));
+            ApplyJointTargetDeg(player.wrist2, Mathf.Lerp(fromWrist2, wrist2Deg, t));
+            ApplyJointTargetDeg(player.wrist3, Mathf.Lerp(fromWrist3, wrist3Deg, t));
+
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        ApplyJointTargetDeg(player.shoulderPan, shoulderPanDeg);
+        ApplyJointTargetDeg(player.shoulderLift, shoulderLiftDeg);
+        ApplyJointTargetDeg(player.elbow, elbowDeg);
+        ApplyJointTargetDeg(player.wrist1, wrist1Deg);
+        ApplyJointTargetDeg(player.wrist2, wrist2Deg);
+        ApplyJointTargetDeg(player.wrist3, wrist3Deg);
+    }
+
+    private float GetJointTargetDeg(ArticulationBody joint)
+    {
+        if (joint == null)
+            return 0f;
+
+        return joint.xDrive.target;
+    }
+
+    private void ApplyJointTargetDeg(ArticulationBody joint, float targetDeg)
+    {
+        if (joint == null)
+            return;
+
+        ArticulationDrive drive = joint.xDrive;
+        drive.stiffness = player.stiffness;
+        drive.damping = player.damping;
+        drive.forceLimit = player.forceLimit;
+        drive.target = targetDeg;
+        joint.xDrive = drive;
+    }
+
+    private bool ValidateJointReferences()
+    {
+        if (player.shoulderPan == null)
+        {
+            Debug.LogError("player.shoulderPan is not assigned.");
+            return false;
+        }
+
+        if (player.shoulderLift == null)
+        {
+            Debug.LogError("player.shoulderLift is not assigned.");
+            return false;
+        }
+
+        if (player.elbow == null)
+        {
+            Debug.LogError("player.elbow is not assigned.");
+            return false;
+        }
+
+        if (player.wrist1 == null)
+        {
+            Debug.LogError("player.wrist1 is not assigned.");
+            return false;
+        }
+
+        if (player.wrist2 == null)
+        {
+            Debug.LogError("player.wrist2 is not assigned.");
+            return false;
+        }
+
+        if (player.wrist3 == null)
+        {
+            Debug.LogError("player.wrist3 is not assigned.");
+            return false;
+        }
+
+        return true;
     }
 
     private bool AreObjectsTouching(Transform a, Transform b)
