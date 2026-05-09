@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Globalization;
 using System.IO;
 using System.Text;
 using UnityEngine;
@@ -12,11 +13,22 @@ public class TrajectoryCsvLogger : MonoBehaviour
     public string baseFolderPath = "/home/anywoo/바탕화면/TrajectoryLog";
     public float sampleRateHz = 10f;
 
+    [Header("Folder Index Settings")]
+    public int startIndex = 0;
+    public int indexDigits = 3;
+
     private Coroutine logRoutine;
     private StreamWriter writer;
+
     private bool isLogging = false;
     private float startTime;
+
     private int sampleIndex;
+    private int currentSequenceIndex = -1;
+    private int currentSequenceSampleIndex = 0;
+
+    private bool gripperClosed = false;
+
     private string currentFolderPath;
     private string currentCsvPath;
 
@@ -24,7 +36,7 @@ public class TrajectoryCsvLogger : MonoBehaviour
     public string CurrentCsvPath => currentCsvPath;
     public bool IsLogging => isLogging;
 
-    public void StartLogging()
+    public void StartLogging(bool initialGripperClosed = false)
     {
         if (player == null)
         {
@@ -37,8 +49,10 @@ public class TrajectoryCsvLogger : MonoBehaviour
         Directory.CreateDirectory(baseFolderPath);
 
         int nextIndex = GetNextTrajectoryIndex();
-        string folderName = $"trajectory_{nextIndex:000}";
-        string fileName = $"trajectory_{nextIndex:000}.csv";
+        string indexText = nextIndex.ToString().PadLeft(Mathf.Max(1, indexDigits), '0');
+
+        string folderName = $"trajectory_{indexText}";
+        string fileName = $"trajectory_{indexText}.csv";
 
         currentFolderPath = Path.Combine(baseFolderPath, folderName);
         Directory.CreateDirectory(currentFolderPath);
@@ -48,12 +62,29 @@ public class TrajectoryCsvLogger : MonoBehaviour
         writer = new StreamWriter(currentCsvPath, false, new UTF8Encoding(true));
         writer.AutoFlush = true;
 
-        writer.WriteLine("sample_index,elapsed_sec,shoulder_pan_deg,shoulder_lift_deg,elbow_deg,wrist_1_deg,wrist_2_deg,wrist_3_deg");
+        writer.WriteLine(
+            "sample_index," +
+            "sequence_index," +
+            "elapsed_sec," +
+            "shoulder_pan_deg," +
+            "shoulder_lift_deg," +
+            "elbow_deg," +
+            "wrist_1_deg," +
+            "wrist_2_deg," +
+            "wrist_3_deg," +
+            "gripper_closed," +
+            "gripper_state"
+        );
 
         startTime = Time.time;
         sampleIndex = 0;
-        isLogging = true;
 
+        currentSequenceIndex = -1;
+        currentSequenceSampleIndex = 0;
+
+        gripperClosed = initialGripperClosed;
+
+        isLogging = true;
         logRoutine = StartCoroutine(LogCoroutine());
 
         Debug.Log($"Trajectory logging started: {currentCsvPath}");
@@ -62,9 +93,7 @@ public class TrajectoryCsvLogger : MonoBehaviour
     public void StopLogging()
     {
         if (isLogging)
-        {
             WriteSample();
-        }
 
         isLogging = false;
 
@@ -82,11 +111,26 @@ public class TrajectoryCsvLogger : MonoBehaviour
         }
     }
 
+    public void BeginSequence(int sequenceIndex)
+    {
+        currentSequenceIndex = sequenceIndex;
+        currentSequenceSampleIndex = 0;
+
+        WriteSample();
+    }
+
+    public void SetGripperClosed(bool closed)
+    {
+        if (gripperClosed == closed)
+            return;
+
+        gripperClosed = closed;
+        WriteSample();
+    }
+
     private IEnumerator LogCoroutine()
     {
         float interval = 1f / Mathf.Max(0.0001f, sampleRateHz);
-
-        WriteSample();
 
         while (isLogging)
         {
@@ -100,41 +144,57 @@ public class TrajectoryCsvLogger : MonoBehaviour
         if (!isLogging || writer == null || player == null)
             return;
 
-        float elapsed = Time.time - startTime;
+        if (currentSequenceIndex < 0)
+            return;
+
         float[] deg = player.GetCurrentJointPositionsDeg();
 
         if (deg == null || deg.Length < 6)
             return;
 
+        float elapsed = Time.time - startTime;
+
+        string sequenceIndexText =
+            $"{currentSequenceIndex}_{currentSequenceSampleIndex}";
+
+        string gripperState = gripperClosed ? "closed" : "open";
+        int gripperClosedInt = gripperClosed ? 1 : 0;
+
         writer.WriteLine(
             $"{sampleIndex}," +
-            $"{elapsed:F4}," +
-            $"{deg[0]:F6}," +
-            $"{deg[1]:F6}," +
-            $"{deg[2]:F6}," +
-            $"{deg[3]:F6}," +
-            $"{deg[4]:F6}," +
-            $"{deg[5]:F6}"
+            $"{sequenceIndexText}," +
+            $"{elapsed.ToString("F4", CultureInfo.InvariantCulture)}," +
+            $"{deg[0].ToString("F6", CultureInfo.InvariantCulture)}," +
+            $"{deg[1].ToString("F6", CultureInfo.InvariantCulture)}," +
+            $"{deg[2].ToString("F6", CultureInfo.InvariantCulture)}," +
+            $"{deg[3].ToString("F6", CultureInfo.InvariantCulture)}," +
+            $"{deg[4].ToString("F6", CultureInfo.InvariantCulture)}," +
+            $"{deg[5].ToString("F6", CultureInfo.InvariantCulture)}," +
+            $"{gripperClosedInt}," +
+            $"{gripperState}"
         );
 
         sampleIndex++;
+        currentSequenceSampleIndex++;
     }
 
     private int GetNextTrajectoryIndex()
     {
         if (!Directory.Exists(baseFolderPath))
-            return 1;
+            return startIndex;
 
-        int maxIndex = 0;
+        int maxIndex = startIndex - 1;
         string[] dirs = Directory.GetDirectories(baseFolderPath, "trajectory_*");
 
         foreach (string dir in dirs)
         {
             string name = Path.GetFileName(dir);
+
             if (!name.StartsWith("trajectory_"))
                 continue;
 
             string suffix = name.Substring("trajectory_".Length);
+
             if (int.TryParse(suffix, out int idx) && idx > maxIndex)
                 maxIndex = idx;
         }
